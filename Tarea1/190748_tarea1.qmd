@@ -1,0 +1,72 @@
+---
+title: "Food Trucks"
+format: pdf
+editor: visual
+---
+
+## Reporte de
+
+El objetivo de este reporte presentar un análisis sobre la industria de los food truck en la Ciudad de México. Todos los análisis se realizaron con el censo *foodtruck* el cual contiene todos los food trucks registrados ante la COFEPRIS. 
+Los datos que ocupamos en este análisis nos fueron proporcionados por *CDMX a la Carta*, de una encuesta que levantaron. La información que contiene la encuesta proviene de los foodtrucks con 20% más reviews. 
+```{r, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+foodtruck <- read_csv("foodtrucks.csv")
+foodtruck20 <- read_csv("foodtrucks20.csv") 
+```
+Nuestros datos se ven de la siguiente manera
+
+```{r, echo = FALSE}
+head(foodtruck20)
+```
+
+Algunas estadísticas descriptivas
+
+```{r, echo = FALSE}
+summary(foodtruck20)
+ggplot(foodtruck20, aes(x = Menu_Price)) +
+  geom_histogram(binwidth = 1, fill = "#39a8c0", color = "black") +
+  theme_minimal() +
+  labs(title = "Histograma de Precio Promedio del Platillo",
+       x = "Precio Promedio del Platillo",
+       y = "Frecuencia")
+
+```
+
+
+### 1. Intervalo de confianza del 95% de la media de *Menu_Price*  
+
+```{r, echo=FALSE}
+
+t_test <- t.test(foodtruck20$Menu_Price, conf.level = 0.95)
+cat("Podemos afirmar con un 95% de confianza que el precio promedio \ndel platillo se encuentra entre", "$",t_test$conf.int[1], "y $", t_test$conf.int[2], "MXM \n")
+
+```
+### 2. Representatividad
+Debido a las sospechas acerca de la representatividad de los datos ya que estos vienen de la revista *CDMX a la Carta* y la forma en la que los recuperaron fue basandose  únicamente en el 20% de los food trucks con más reviews. Es muy probable que la muestre se encuentre sesgada ya que posiblemente los food trucks con más reviews sean también los que tienen mayor demanda y esto podría hacer que sus precios sean mayores a los de los food trucks con menos demanda. También se podría dar el caso que los food truck con más cantidad de reviews sean aquellos más baratos y esto sesgaría a nuestra variable de interés para abajo. 
+Sea cual sea el caso, podemos afirmar que nuestra muestra no es representativa de la población.
+
+Para mostrar que no es representativa, podemos hacer uso del censo *foodtruck* el cual contiene información de 1000 foodtrucks. Sin embargo, en el censo solo tenemos acceso al número de clientes, tipo de cocina y al ingreso mensual. Debido a que no tenemos a nuestra variable objetivo en el censo, podemos hacer uso de las preguntas ancla. Nos apoyaremos de la variable número de clientes. 
+
+Primero observemos la variable que indica el número de clientes: 
+```{r, echo=FALSE}
+# Crear un data frame combinado para facilitar la leyenda
+combined_data <- bind_rows(
+  foodtruck %>% mutate(Source = "Censo"),
+  foodtruck20 %>% mutate(Source = "Muestra")
+)
+
+ggplot(combined_data, aes(x = Number_of_Customers, fill = Source)) +
+  geom_histogram(data = subset(combined_data, Source == "Censo"), 
+                 binwidth = 10, alpha = 0.5) +
+  geom_histogram(data = subset(combined_data, Source == "Muestra"), 
+                 binwidth = 10, alpha = 0.5) +
+  scale_fill_manual(values = c("Censo" = "#39a8c0", "Muestra" = "red")) +
+  labs(title = "Distribución de Número de Clientes",
+       x = "Number of Customers",
+       y = "Frecuencia",
+       fill = "Fuente") +  # Título de la leyenda
+  theme_minimal()
+```
+Podemos ver claramente como no es la misma distribución, los datos del censo y la muestra tienen diferentes histogramas.
+
