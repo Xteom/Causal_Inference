@@ -302,3 +302,44 @@ hist_bootstrap100 <- ggplot(data.frame(bootstrap100), aes(x = bootstrap100)) +
 
 hist_bootstrap100
 ```
+
+```{r, echo=FALSE}
+# Actualización de la función para incluir el cálculo de la varianza ajustada
+#L: tamaño de submuestra
+# M: número de repeticiónes
+bootstrap_Menu_Price_ratios_var_adjusted <- function(data, L, M){
+  n <- nrow(data) # Tamaño de la muestra original
+  bootstrap_ratios <- numeric(M) # Para almacenar los ratios calculados en cada repetición
+  bootstrap_vars <- numeric(M) # Para almacenar las varianzas ajustadas en cada repetición
+  
+  for(i in 1:M){ # Repetir M veces
+    sample_indices <- sample(n, size = L, replace = TRUE) # Seleccionar una submuestra aleatoria de tamaño L
+    sample_data <- data$Menu_Price[sample_indices]
+    
+    # Calcular el ratio para la submuestra
+    ratio <- get_ratio(sample_data)
+    bootstrap_ratios[i] <- ratio
+    
+    # Calcular la varianza ajustada para la submuestra
+    Xboot <- mean(sample_data) # Media de la submuestra bootstrap
+    var_adjusted <- (n / L) * (1 / (L - 1)) * sum((sample_data - Xboot)^2)
+    bootstrap_vars[i] <- var_adjusted
+  }
+  
+  return(list(ratios = bootstrap_ratios, variances = bootstrap_vars))
+}
+
+# Tamaño de la muestra original
+L <- nrow(foodtruck20)
+
+# Aplicar la función al dataframe foodtruck20 con M = 100
+results <- bootstrap_Menu_Price_ratios_var_adjusted(foodtruck20, 100, L)
+
+# Calcular la media de los ratios de bootstrap
+mean_bootstrap <- mean(results$ratios)
+
+# Calcular la varianza promedio ajustada de las repeticiones de bootstrap
+mean_var_adjusted <- mean(results$variances)
+
+
+```
