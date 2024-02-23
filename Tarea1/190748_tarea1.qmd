@@ -1,10 +1,10 @@
 ---
-title: "Food Trucks"
+title: "Tarea 1: Food Trucks en CDMX"
+subtitle: "Inferencia Causal"
 format: pdf
+author: Mateo De La Roche Macías
 editor: visual
 ---
-
-## Reporte de
 
 El objetivo de este reporte presentar un análisis sobre la industria de los food truck en la Ciudad de México. Todos los análisis se realizaron con el censo *foodtruck* el cual contiene todos los food trucks registrados ante la COFEPRIS. Los datos que ocupamos en este análisis nos fueron proporcionados por *CDMX a la Carta*, de una encuesta que levantaron. La información que contiene la encuesta proviene de los foodtrucks con 20% más reviews.
 
@@ -130,7 +130,7 @@ grid.arrange(representatividad_dist2, representatividad_hist2, ncol = 1)
 
 A diferencia de los datos obtenidos con la muestra de *CDMX a la Carta*, podemos ver como con la muestra aleatoria, muestra y datos tienen la misma distribución.
 
-Mientras realizábamos el análisis, hubo un analista creativo al que que durante el reporte nos referiremos como C. C decidió tomar una muestra eligiendo 20 food trucks de cada tipo de comida, para sugerir una muestra. A pesar que su intención no era mala, el realizar una muestra de esta forma mete un sesgo de selección a los datos ya que está forzando a que los food trucks de todos los alimentos tengan el mismo número de observaciones lo cual no es representativo de la realidad, cabe agregar que su estrategia no es un muestreo aleatorio.
+Mientras realizábamos el análisis, hubo un analista creativo al que que durante el reporte nos referiremos como C. C decidió tomar una muestra eligiendo 20 food trucks de cada tipo de comida, para sugerir una muestra. A pesar que su intención no era mala, el realizar una muestra de esta forma introduce un sesgo de selección a los datos ya que está forzando a que los food trucks de todos los alimentos tengan el mismo número de observaciones lo cual no es representativo de la realidad, cabe agregar que su estrategia no es un muestreo aleatorio.
 
 Sin embargo, si tuviéramos que trabajar con la muestra de C, es posible encontrar una solución, ya que en la muestra de C se tiene la misma cantidad de cada food truck por comida y en el censo no, lo que se puede hacer es ver la proporción de cada food truck por tipo de comida en el censo y asignarle una ponderación a ese tipo de comida según su proporción en el censo.
 
