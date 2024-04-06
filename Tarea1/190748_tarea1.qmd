@@ -281,31 +281,9 @@ hist_bootstrap200
 
 *Bootsrap con muestreo de 100 observaciones*
 
-
-```{r, echo=FALSE}
-
-bootstrap100 <- bootstrap_Menu_Price_ratios(foodtruck20, 100)
-mean_bootstrap100 <- mean(bootstrap100)
-ic_bootstrap100 <- quantile(bootstrap100, probs = c(0.05, 0.95))
-
-cat("Estimación puntual del ratio:", mean_bootstrap100, " con un intervalo de confianza \ndel 95% entre", ic_bootstrap100," para el ratio con muestras de 100 obs. \n")
-
-# Graficar el histograma con intervalo de confianza del 90%
-hist_bootstrap100 <- ggplot(data.frame(bootstrap100), aes(x = bootstrap100)) +
-  geom_histogram(binwidth = 0.1, fill = "skyblue", color = "black") +
-  geom_vline(xintercept = ic_bootstrap100[1], color = "red", linetype = "dashed", linewidth = 1) +
-  geom_vline(xintercept = ic_bootstrap100[2], color = "red", linetype = "dashed", linewidth = 1) +
-  labs(title = "Histograma de Ratios de Bootstrap (muestras de 100) \ncon Intervalo de Confianza del 90%",
-       x = "Ratio (Percentil 90 / Percentil 10)",
-       y = "Frecuencia") +
-  theme_minimal()
-
-hist_bootstrap100
-```
-
 ```{r, echo=FALSE}
 # Actualización de la función para incluir el cálculo de la varianza ajustada
-#L: tamaño de submuestra
+# L: tamaño de submuestra
 # M: número de repeticiónes
 bootstrap_Menu_Price_ratios_var_adjusted <- function(data, L, M){
   n <- nrow(data) # Tamaño de la muestra original
@@ -313,8 +291,8 @@ bootstrap_Menu_Price_ratios_var_adjusted <- function(data, L, M){
   bootstrap_vars <- numeric(M) # Para almacenar las varianzas ajustadas en cada repetición
   
   for(i in 1:M){ # Repetir M veces
-    sample_indices <- sample(n, size = L, replace = TRUE) # Seleccionar una submuestra aleatoria de tamaño L
-    sample_data <- data$Menu_Price[sample_indices]
+   # Seleccionar una submuestra aleatoria de tamaño L
+    sample_data <- data$Menu_Price[sample(n, size = L, replace = TRUE)]
     
     # Calcular el ratio para la submuestra
     ratio <- get_ratio(sample_data)
@@ -322,24 +300,50 @@ bootstrap_Menu_Price_ratios_var_adjusted <- function(data, L, M){
     
     # Calcular la varianza ajustada para la submuestra
     Xboot <- mean(sample_data) # Media de la submuestra bootstrap
-    var_adjusted <- (n / L) * (1 / (L - 1)) * sum((sample_data - Xboot)^2)
+    var_adjusted <- (L / n) * (1 / (M - 1)) * sum((sample_data - Xboot)^2)
     bootstrap_vars[i] <- var_adjusted
   }
   
   return(list(ratios = bootstrap_ratios, variances = bootstrap_vars))
 }
 
-# Tamaño de la muestra original
-L <- nrow(foodtruck20)
 
 # Aplicar la función al dataframe foodtruck20 con M = 100
-results <- bootstrap_Menu_Price_ratios_var_adjusted(foodtruck20, 100, L)
+bootstrap100_adj <- bootstrap_Menu_Price_ratios_var_adjusted(foodtruck20, 100, 1000)
 
-# Calcular la media de los ratios de bootstrap
-mean_bootstrap <- mean(results$ratios)
+# Calcular la varianza promedio ajustada de las repeticiones de bootstrap y la media
+mean_var_adjusted <- mean(bootstrap100_adj$variances)
+mean_bootstrap100 <- mean(bootstrap100_adj$ratios)
+ic_bootstrap100_adj <- quantile(bootstrap100_adj$ratios, probs = c(0.025, 0.975))
 
-# Calcular la varianza promedio ajustada de las repeticiones de bootstrap
-mean_var_adjusted <- mean(results$variances)
+
+# bootstrap no ajustado
+bootstrap100 <- bootstrap_Menu_Price_ratios(foodtruck20, 100)
+ic_bootstrap100 <- quantile(bootstrap100, probs = c(0.05, 0.95))
+
+
+
+# Crear el histograma y añadir intervalos de confianza
+histograma <- ggplot(data.frame(Ratio = bootstrap100_adj$ratios), 
+                     aes(x = Ratio)) +
+  geom_histogram(binwidth = 0.1, fill = "skyblue", color = "black", alpha = 0.7) +
+  geom_vline(xintercept = ic_bootstrap100[1], color = "blue", linetype = "dashed", linewidth = 1) +
+  geom_vline(xintercept = ic_bootstrap100[2], color = "blue", linetype = "dashed", linewidth = 1) +
+  geom_vline(xintercept = ic_bootstrap100_adj[1], color = "purple", linetype = "dashed", linewidth = 1) +
+  geom_vline(xintercept = ic_bootstrap100_adj[2], color = "purple", linetype = "dashed", linewidth = 1) +
+  scale_color_manual(name = "Intervalo de Confianza", 
+                     values = c("Ajustado" = "purple", "No Ajustado" = "blue")) +
+  labs(title = "Histograma de Ratios de Bootstrap (muestras de 100) \ncon Intervalo de Confianza del 90%",
+       x = "Ratio (Percentil 90 / Percentil 10)",
+       y = "Frecuencia") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# Debido a que ggplot2 no permite añadir directamente una leyenda para geom_vline, utilizaremos annotate para la leyenda
+histograma + annotate("text", x = Inf, y = Inf, label = "----- No Ajustado (Azul)\n----- Ajustado (Morado)", 
+                      hjust = 1.1, vjust = 1.1, size = 3.5, color = "black")
+
+cat("Estimación puntual del ratio:", mean_bootstrap100, " con un intervalo de confianza \ndel 95% entre", ic_bootstrap100_adj," para el ratio con muestras de 100 obs. \n")
 
 
 ```
