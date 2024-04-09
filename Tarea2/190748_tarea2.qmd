@@ -1,0 +1,93 @@
+---
+title: "Tarea 2: ENIGH Salud Alimentaria"
+subtitle: "Inferencia Causal"
+format: pdf
+author: Mateo De La Roche Macías
+editor: visual
+echo: false #default
+include: true #default
+---
+
+El objetivo primordial es examinar cómo diversos factores socioeconómicos, como el ingreso corriente, la ubicación geográfica y el gasto en alimentos, están relacionados con la salud alimentaria de los hogares mexicanos. La ENIGH 2020 recaba información sobre los gastos en alimentación para una muestra representativa a nivel nacional de 89,006 hogares. Los gastos que incluye la base de datos son trimestrales y se recopilaron del 21 de agosto al 28 de noviembre de 2020.
+
+```{r, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+enigh <- read_csv("ENIGH_alimentos2020.csv")
+set.seed(69)
+```
+
+### Panorama general de los datos
+
+En los datos originales exiten `r sum(enigh$alimentos == 0)` observaciónes faltantes, sin embargo, como son pocas en comparación con las observaciones completas (`r sum(enigh$alimentos != 0)`) para nuestro análisis hemos decidido solo quedarnos con las observaciónes completas. 
+
+```{r}
+enigh <- enigh %>%
+  filter(alimentos > 0)
+
+```
+
+#### Información de las variables
+```{r}
+str(enigh)
+```
+#### Pequeño resumen de los datos
+```{r}
+summary(enigh)
+```
+*Proporción de gasto destinado a la alimentación en hogares mexicanos*
+
+```{r, include=FALSE}
+prop_alim_mon_estrato <- enigh %>%
+  group_by(est_socio) %>%
+  summarise(mean_prop_alimen = mean(alimentos / gasto_mon, na.rm = TRUE))
+#prop_alim_estrato
+#round(prop_alim_estrato[4, 2][[1]], 4)
+
+```
+
+En la siguiente gráfica de velas podemos ver que la proporción de ingreso destinadas a alimentación se va reduciendo mientras aumenta el estrato socieconómico. Los mexicanos que se encuentran en el estato más bajo destinan el `r round(prop_alim_mon_estrato[1, 2][[1]], 4)*100`% de su ingreso para alimentación mientras que los de estrato alto `r round(prop_alim_mon_estrato[4, 2][[1]], 4)*100`. Esto quiere decir que mientras mayor sea el estrato las personas tiene menor dificultad para cubrir sus gastos alimenticios.
+
+```{r}
+enigh <- enigh %>% 
+  mutate(prop_alimen = alimentos / gasto_mon)
+
+# Grafica la distribución de la proporción de gasto en alimentos por estrato socioeconómico.
+enigh %>%
+  ggplot(aes(x = factor(est_socio), y = alimentos / gasto_mon)) +
+  geom_boxplot() +
+  scale_x_discrete(
+    labels = c("1" = "Bajo", "2" = "Medio bajo", "3" = "Medio alto", "4" = "Alto")) +
+  labs(x = "Estrato Socioeconómico", y = "Proporción de Gasto en Alimentos",
+       title = "Distribución de la Proporción de Gasto \nen Alimentos por Estrato Socioeconómico") +
+  theme_minimal()
+
+```
+*Gasto dirigido a alimentación per cápita*
+```{r, include=FALSE}
+enigh <- enigh %>%
+  mutate(alimentos_pc = alimentos / tot_integ)
+
+prop_alim_capita_estrato <- enigh %>%
+  group_by(est_socio) %>%
+  summarise(mean_alimen_percap = mean(alimentos / tot_integ, na.rm = TRUE))
+
+prop_alim_capita_estrato
+round(prop_alim_estrato[4, 2][[1]], 4)
+```
+
+
+```{r}
+ggplot(enigh, aes(x = factor(est_socio, 
+                             labels = c("Bajo", "Medio bajo", "Medio alto", "Alto")),
+                  y = alimentos_pc)) +
+  geom_boxplot() +
+  labs(x = "Estrato Socioeconómico", y = "Gasto en Alimentación per Cápita",
+       title = "Distribución del Gasto en Alimentación per Cápita por Estrato Socioeconómico") +
+  theme_minimal()
+
+```
+
+
