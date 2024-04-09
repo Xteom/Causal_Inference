@@ -21,7 +21,7 @@ set.seed(69)
 
 ### Panorama general de los datos
 
-En los datos originales exiten `r sum(enigh$alimentos == 0)` observaciónes faltantes, sin embargo, como son pocas en comparación con las observaciones completas (`r sum(enigh$alimentos != 0)`) para nuestro análisis hemos decidido solo quedarnos con las observaciónes completas. 
+En los datos originales exiten `r sum(enigh$alimentos == 0)` observaciónes faltantes, sin embargo, como son pocas en comparación con las observaciones completas (`r sum(enigh$alimentos != 0)`) para nuestro análisis hemos decidido solo quedarnos con las observaciónes completas.
 
 ```{r}
 enigh <- enigh %>%
@@ -30,13 +30,17 @@ enigh <- enigh %>%
 ```
 
 #### Información de las variables
+
 ```{r}
 str(enigh)
 ```
+
 #### Pequeño resumen de los datos
+
 ```{r}
 summary(enigh)
 ```
+
 *Proporción de gasto destinado a la alimentación en hogares mexicanos*
 
 ```{r, include=FALSE}
@@ -65,7 +69,9 @@ enigh %>%
   theme_minimal()
 
 ```
+
 *Gasto dirigido a alimentación per cápita*
+
 ```{r, include=FALSE}
 enigh <- enigh %>%
   mutate(alimentos_pc = alimentos / tot_integ)
@@ -74,10 +80,8 @@ prop_alim_capita_estrato <- enigh %>%
   group_by(est_socio) %>%
   summarise(mean_alimen_percap = mean(alimentos / tot_integ, na.rm = TRUE))
 
-prop_alim_capita_estrato
-round(prop_alim_estrato[4, 2][[1]], 4)
+round(prop_alim_capita_estrato[4, 2][[1]], 4)
 ```
-
 
 ```{r}
 ggplot(enigh, aes(x = factor(est_socio, 
@@ -89,5 +93,3 @@ ggplot(enigh, aes(x = factor(est_socio,
   theme_minimal()
 
 ```
-
-
