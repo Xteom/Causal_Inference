@@ -231,4 +231,43 @@ $$
 $$
 prop\_alimen_i = 0.495 - 0.057 \cdot est\_socio2 - 0.106 \cdot est\_socio3 - 0.149 \cdot est\_socio4 + U
 $$
+# falta reflexion de incisos
+
+En ambas gráficas podemos ver como los errores de las regresiónes, no son homocedásticos, entre estratos y según como va cambiando la variable de estímulo, podemos ver como cambian los errores. (deberíamos usar errores heterocedásticos)
+
+## Análisis
+```{r}
+enigh_filtrado <- enigh_filtrado %>%
+  mutate(est_socio2 = as.numeric(est_socio == 2),
+         est_socio3 = as.numeric(est_socio == 3),
+         est_socio4 = as.numeric(est_socio == 4))
+
+library(lmtest)
+library(sandwich)
+
+enigh_filtrado <- na.omit(enigh_filtrado)
+model1 <- lm(prop_alimen ~ est_socio2 + est_socio3 + est_socio4 + urbano + tot_integ + prop_mujeres + prop_menores + prop_p65mas, data = enigh_filtrado)
+model2 <- lm(prop_alimen ~ log(ing_cor)+ urbano + tot_integ + prop_menores + prop_p65mas + sexo_jefe, data = enigh_filtrado)
+model3 <- lm(alimentos_pc ~  est_socio2 + est_socio3 + est_socio4 + urbano + tot_integ + prop_mujeres + prop_menores + prop_p65mas, data = enigh_filtrado)
+model4 <- lm(alimentos_pc ~ log(ing_cor)+ urbano + tot_integ + prop_menores + prop_p65mas + sexo_jefe, data = enigh_filtrado)
+model5 <- lm(log(alimentos_pc) ~ est_socio2 + est_socio3 + est_socio4 + urbano + tot_integ + prop_mujeres + prop_menores + prop_p65mas, data = enigh_filtrado)
+model6 <- lm(log(alimentos_pc) ~ log(ing_cor)+ urbano + tot_integ + prop_menores + prop_p65mas + sexo_jefe, data = enigh_filtrado)
+
+
+robust_se_values <- sqrt(diag(vcovHC(model1, type = "HC1")))
+robust_se_values2 <- sqrt(diag(vcovHC(model2, type = "HC1")))
+robust_se_values3 <- sqrt(diag(vcovHC(model3, type = "HC1")))
+robust_se_values4 <- sqrt(diag(vcovHC(model4, type = "HC1")))
+robust_se_values5 <- sqrt(diag(vcovHC(model5, type = "HC1")))
+robust_se_values6 <- sqrt(diag(vcovHC(model6, type = "HC1")))
+
+
+stargazer(model1,model2, model3, model4, model5, model6, type = "latex",
+          se = list(robust_se_values, robust_se_values2, robust_se_values3, robust_se_values4, robust_se_values5, robust_se_values6), 
+         star.cutoffs = c(0.1, 0.05, 0.01)) 
+
+
+
+
+```
 
