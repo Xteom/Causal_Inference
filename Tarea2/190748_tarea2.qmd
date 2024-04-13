@@ -15,6 +15,7 @@ library(tidyverse)
 library(ggplot2)
 library(dplyr)
 library(gridExtra)
+library(stargazer)
 enigh <- read_csv("ENIGH_alimentos2020.csv")
 set.seed(69)
 ```
@@ -25,8 +26,8 @@ En los datos originales exiten `r sum(enigh$alimentos == 0)` observaciónes falt
 
 ```{r}
 enigh <- enigh %>%
-  filter(alimentos > 0)
-
+  filter(alimentos > 0, ing_cor > 0)
+enigh$sexo_jefe[enigh$sexo_jefe == 2] <- 0
 ```
 
 #### Información de las variables
@@ -52,7 +53,7 @@ prop_alim_mon_estrato <- enigh %>%
 
 ```
 
-En la siguiente gráfica de velas podemos ver que la proporción de ingreso destinadas a alimentación se va reduciendo mientras aumenta el estrato socieconómico. Los mexicanos que se encuentran en el estato más bajo destinan el `r round(prop_alim_mon_estrato[1, 2][[1]], 4)*100`% de su ingreso para alimentación mientras que los de estrato alto `r round(prop_alim_mon_estrato[4, 2][[1]], 4)*100`. Esto quiere decir que mientras mayor sea el estrato las personas tiene menor dificultad para cubrir sus gastos alimenticios.
+En la siguiente gráfica de velas podemos ver que la proporción de ingreso destinadas a alimentación se va reduciendo mientras aumenta el estrato socieconómico. Los mexicanos que se encuentran en el estrato más bajo destinan el `r round(prop_alim_mon_estrato[1, 2][[1]], 4)*100`% de su ingreso para alimentación mientras que los de estrato alto `r round(prop_alim_mon_estrato[4, 2][[1]], 4)*100`. Esto quiere decir que mientras mayor sea el estrato las personas tiene menor dificultad para cubrir sus gastos alimenticios.
 
 ```{r}
 enigh <- enigh %>% 
@@ -74,22 +75,160 @@ enigh %>%
 
 ```{r, include=FALSE}
 enigh <- enigh %>%
-  mutate(alimentos_pc = alimentos / tot_integ)
+  mutate(alimentos_pc = alimentos / tot_integ,
+         log_alimentos_pc = log(alimentos_pc))
 
 prop_alim_capita_estrato <- enigh %>%
   group_by(est_socio) %>%
-  summarise(mean_alimen_percap = mean(alimentos / tot_integ, na.rm = TRUE))
+  summarise(mean_alimen_percap = mean(log_alimentos_pc, na.rm = TRUE))
 
-round(prop_alim_capita_estrato[4, 2][[1]], 4)
+round(prop_alim_capita_estrato[3, 2][[1]], 4)
 ```
 
 ```{r}
 ggplot(enigh, aes(x = factor(est_socio, 
                              labels = c("Bajo", "Medio bajo", "Medio alto", "Alto")),
-                  y = alimentos_pc)) +
+                  y = log_alimentos_pc)) +
   geom_boxplot() +
   labs(x = "Estrato Socioeconómico", y = "Gasto en Alimentación per Cápita",
-       title = "Distribución del Gasto en Alimentación per Cápita por Estrato Socioeconómico") +
+       title = "Distribución del Gasto porcentual en Alimentación \nper Cápita por Estrato Socioeconómico") +
   theme_minimal()
 
 ```
+Al analizar los datos del gasto promedio en alimentación per cápita a través de una transformación logarítmica, se observa una tendencia creciente conforme nos movemos hacia estratos socioeconómicos más altos. Los hogares en el estrato más bajo tienen un promedio logarítmico de `r round(prop_alim_capita_estrato[1, 2][[1]], 2)`, en contraste con un promedio logarítmico de `r round(prop_alim_capita_estrato[4, 2][[1]], 2)` en el estrato más alto. Esta diferencia en los promedios logarítmicos indica que el gasto promedio en alimentación per cápita es sustancialmente mayor en hogares de mayor poder adquisitivo. En términos porcentuales, tras retransformar estos promedios a la escala original, podemos ver que el gasto en alimentación per cápita en el estrato más alto es aproximadamente `r round(exp(prop_alim_capita_estrato[4, 2][[1]]) / exp(prop_alim_capita_estrato[1, 2][[1]]) - 1, 2)*100`% mayor que en el estrato más bajo. Estos hallazgos sugieren que el gasto en alimentación por individuo aumenta con el nivel socioeconómico, destacando posibles diferencias en la calidad y cantidad de alimentos consumidos entre los distintos estratos.
+
+*Estadísticas descriptivas*
+
+```{r}
+
+# Definir las variables a incluir
+variables_to_include <- names(enigh)[!names(enigh) %in% c("folioviv", "ubica_geo")]
+
+print(summary(enigh[, variables_to_include]))
+# Generar la tabla con stargazer
+
+stargazer((enigh[, variables_to_include]), 
+          type = "text",
+          summary.stat = c("n", "mean", "sd", "min", "max"),
+          title = "Estadísticas Descriptivas de las Variables de la ENIGH",
+          notes = "Las variables tam_loc, sexo_jefe y urbano son variables dummy")
+```
+
+### Estrato socioeconómico
+
+```{r}
+enigh_filtrado <- enigh %>%
+  mutate(ing_cor_ajustado = ing_cor * 10000) %>%  # Reajuste a la escala original
+  filter(ing_cor_ajustado < 1000000) %>%  # Filtrar por ingreso menor a 1,000,000
+  mutate(prop_alimen = alimentos / gasto_mon,  # Proporción de gasto en alimentos
+         alimentos_pc = alimentos / tot_integ)  # Gasto en alimentos per cápita
+```
+*Relación entre ingreso corriente y proporción del gasto en alimentos*
+Hay varias cosas que tomar en cuenta: las persoans de estrato socioeconómico bajo casi no tienen ingreso corriente, se ve claramente como hay un mayor concentrado de personas de E.S. bajo con una alta proporción de gasto en alimentos. Se ve una tendencia de como conforme aumenta el E.S., va bajando la proporción de gasto en alimentos. 
+```{r}
+ggplot(enigh_filtrado, aes(x = ing_cor_ajustado, y = prop_alimen, color = as.factor(est_socio))) +
+  geom_point(alpha = 0.5) +
+  scale_color_manual(values = c("red", "blue", "green", "purple"),
+                     labels = c("Bajo", "Medio Bajo", "Medio Alto", "Alto"),
+                     breaks = c("1", "2", "3", "4")) +
+  labs(x = "Ingreso Corriente (ajustado)", y = "Proporción de Gasto en Alimentos",
+       color = "Estrato Socioeconómico") +
+  ggtitle("Relación entre Ingreso Corriente y Proporción de Gasto en Alimentos") +
+  theme_minimal()
+```
+*Relación entre Ingreso Corriente y Gasto en Alimentos Per Cápita*
+Se puede ver como sin importar el estrato socioeconómico, la mayoría de los puntos se encuentran concentrados en un pequeño "triangulo" en la gráfica, sin embargo, si se puede ver como el a menor ingreso corriente hay menor gasto en alimentos. Esto podría ser indicio de que las personas con menor ingreso no alcanzan a satisfacer sus necesidades alimetarias.
+```{r}
+ggplot(enigh_filtrado, aes(x = ing_cor_ajustado, y = alimentos_pc, color = as.factor(est_socio))) +
+  geom_point(alpha = 0.5) +
+  scale_color_manual(values = c("red", "blue", "green", "purple"),
+                     labels = c("Bajo", "Medio Bajo", "Medio Alto", "Alto"),
+                     breaks = c("1", "2", "3", "4")) +
+  labs(x = "Ingreso Corriente (ajustado)", y = "Gasto en Alimentos Per Cápita",
+       color = "Estrato Socioeconómico") +
+  ggtitle("Relación entre Ingreso Corriente y Gasto en Alimentos Per Cápita") +
+  theme_minimal()
+```
+*Estimaciones a detalle* 
+```{r}
+enigh_filtrado <- enigh_filtrado %>%
+  mutate(log_ing_cor = log(ing_cor_ajustado))
+```
+
+$prop\_alimen_i = \beta_0 + \beta_1log(ing\_corr_i) + U_i$
+
+
+```{r}
+# Modelo para la proporción de gasto en alimentos
+model_prop_alimen <- lm(prop_alimen ~ log_ing_cor, data = enigh_filtrado)
+# Diagrama de dispersión y línea de regresión para prop_alimen
+ggplot(enigh_filtrado, aes(x = log_ing_cor, y = prop_alimen)) +
+  geom_point(aes(color = as.factor(est_socio)), alpha = 0.5) +
+  scale_color_manual(values = c("red", "blue", "green", "purple"),
+                     labels = c("Bajo", "Medio Bajo", "Medio Alto", "Alto"),
+                     breaks = c("1", "2", "3", "4")) +
+  geom_smooth(method = "lm", se = FALSE, color = "skyblue") +
+  labs(x = "Logaritmo del Ingreso Corriente", y = "Proporción de Gasto en Alimentos",
+       title = "Relación entre Ingreso Corriente y Proporción de Gasto en Alimentos")
+```
+
+$log(alimento\_pc_i) = \beta_0 + \beta_1log(ing\_corr_i) + U_i$
+
+```{r}
+# Modelo para el logaritmo del gasto en alimentos per cápita
+model_log_alimentos_pc <- lm(log_alimentos_pc ~ log_ing_cor, data = enigh_filtrado)
+
+# Diagrama de dispersión y línea de regresión para log_alimentos_pc
+ggplot(enigh_filtrado, aes(x = log_ing_cor, y = log_alimentos_pc)) +
+  geom_point(aes(color = as.factor(est_socio)), alpha = 0.5) +
+  scale_color_manual(values = c("red", "blue", "green", "purple"),
+                     labels = c("Bajo", "Medio Bajo", "Medio Alto", "Alto"),
+                     breaks = c("1", "2", "3", "4")) +
+  geom_smooth(method = "lm", se = FALSE, color = "skyblue") +
+  labs(x = "Logaritmo del Ingreso Corriente", y = "Logaritmo del Gasto en Alimentos Per Cápita",
+       title = "Relación entre Ingreso Corriente y Gasto en Alimentos Per Cápita")
+
+```
+*Resultados en Tabla*
+```{r}
+# Mostrar resultados de las regresiones con stargazer
+stargazer(model_prop_alimen, model_log_alimentos_pc, type = "text",
+          title = "Resultados",
+          header = FALSE, 
+          model.names = FALSE,
+          dep.var.labels.include = FALSE,
+          covariate.labels = c("Log Ingreso Corriente"),
+          omit.stat = c("adj.rsq", "f", "ser"))
+```
+Modelo (1): un aumento de 1% en el ingreso corriente está asociado con una disminución de aproximadamente 0.086% en la proporción del gasto en alimentos sobre el ingreso total.(alto nivel de significancia)
+
+Modelo (2): un aumento del 1% en el ingreso corriente está asociado con un aumento de aproximadamente 0.243% en el logaritmo del gasto en alimentos per cápita. (alto nivel de significancia)
+
+Conclusión, los ingresos más altos están asociados con una menor proporción de gasto en alimentos y un mayor gasto absoluto en alimentos per cápita
+
+*Análisis a detalle* 
+De la relación entre el estrato socioeconómico y las variables $alimento\_pc$ y $alimento\_pc$
+  
+
+```{r}
+enigh_filtrado$est_socio <- as.factor(enigh_filtrado$est_socio)
+enigh_filtrado$est_socio <- relevel(enigh_filtrado$est_socio, ref = "1") 
+
+model_prop_alimen_est_socio <- lm(prop_alimen ~ est_socio, data = enigh_filtrado)
+model_log_alimentos_pc_est_socio <- lm(log_alimentos_pc ~ est_socio, data = enigh_filtrado)
+
+
+stargazer(model_prop_alimen_est_socio, model_log_alimentos_pc_est_socio, type = "text",
+          title = "Resultados de Regresión para Proporción de Gasto en Alimentos y Logaritmo del Gasto en Alimentos Per Cápita",
+          dep.var.labels.include = FALSE)
+
+
+```
+$$
+\log(alimentos\_pc_i) = 7.643 + 0.295 \cdot est\_socio2 + 0.497 \cdot est\_socio3 + 0.714 \cdot \text{est\_socio4} + U
+$$
+
+$$
+prop\_alimen_i = 0.495 - 0.057 \cdot est\_socio2 - 0.106 \cdot est\_socio3 - 0.149 \cdot est\_socio4 + U
+$$
+
