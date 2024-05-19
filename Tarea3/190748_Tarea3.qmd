@@ -36,19 +36,18 @@ oregon_6 <- read.csv("oregon_6.csv")
 oregon_12 <- read.csv("oregon_12.csv")
 ```
 
-
 ## Balances
 
 ### a) Verificación de aleatoriedad al asginar los grupos de tratamiento y control en datos basales.
 
-
-
 ***Tabla de balance para para datos antes de la implementación.***
 
-En los datos tenemos como variables basales, año de nacimiento, género, ingresos del hogar, raza, educación. 
+En los datos tenemos como variables basales, año de nacimiento, género, ingresos del hogar, raza, educación.
+
 ```{r}
 arrange(balance_table(oregon_0, "treatment"),(p_value1))
 ```
+
 La tabla anterior plantea como hipótesis nula que no hay diferencia entre los grupos de tratamiento y control. Aunque la mayoría de las variables no parecen ser diferentes, el p-value en las variables `birthyear_list`, `female_list` y `hhinc_cat_0m` son menores a 0.05 lo cual nos permite concluir con un nivel de significancia del 0.05 que hubo un sesgo en la asignación de tratamiento. Parece ser que el año de nacimiento se utilizó como variable para asignar el tratamiento y que hubo un sesgo significativo otorgandole mayor tratamiento médico a las mujeres. Lo más preocupante es que el promedio de ingresos entre ambos grupos es significativamente muy diferente por lo que podría haber habido alguna especie de resago a la población con ingresos menores.
 
 ### b) Verificación de representatividad en submuestra y después de 12 meses
@@ -58,12 +57,15 @@ La tabla anterior plantea como hipótesis nula que no hay diferencia entre los g
 ```{r}
 arrange(balance_table(oregon_6, "treatment"),(p_value1))
 ```
-Submuestra de 6 Meses: Hay diferencias significativas en varias variables, incluidas `baddays_ment_6m`, `baddays_phys_6m`, `health_gen_bin_6m`, `ins_any_6m` y `needmet_med_6m.` Esto sugiere que la submuestra de 6 meses puede no ser representativa del balance inicial, y podría haber sesgo en la asignación de tratamiento en esta submuestra. En especial se nota una gran diferencia en la variable `ins_any_6m`, la cual indica si tenía algún tipo de seguro, se puede ver como muchas personas del tratamiento si tenían seguro en comparación con las del grupo control. 
+
+Submuestra de 6 Meses: Hay diferencias significativas en varias variables, incluidas `baddays_ment_6m`, `baddays_phys_6m`, `health_gen_bin_6m`, `ins_any_6m` y `needmet_med_6m.` Esto sugiere que la submuestra de 6 meses puede no ser representativa del balance inicial, y podría haber sesgo en la asignación de tratamiento en esta submuestra. En especial se nota una gran diferencia en la variable `ins_any_6m`, la cual indica si tenía algún tipo de seguro, se puede ver como muchas personas del tratamiento si tenían seguro en comparación con las del grupo control.
 
 ***Tabla de balance para para datos después de 12 meses.***
+
 ```{r}
 arrange(balance_table(oregon_12, "treatment"),(p_value1))
 ```
+
 Aquí también se puede observar un sesgo, sin embargo, se observa un sesgo parecido al que se observa en la submuestra tomada a los 6 meses, esto quiere decir que lo más probable es que los encuestadores estén introduciendo alguna especie de sesgo al momento de encuestar.
 
 ### c) Efecto en representatividad
@@ -74,9 +76,9 @@ El uso de la muestra de seis meses puede afectar la representatividad de los res
 
 ### a) Definición de efectos
 
-- **Efecto Promedio del Tratamiento (ATE)**: El ATE es la diferencia promedio en los resultados entre aquellos que recibieron el tratamiento (acceso a Medicaid) y aquellos que no lo recibieron, en la población general. En este contexto, el ATE mide el impacto promedio de tener acceso a Medicaid en la salud general autoreportada de los beneficiarios, independientemente de si realmente usaron el servicio o no.
+-   **Efecto Promedio del Tratamiento (ATE)**: El ATE es la diferencia promedio en los resultados entre aquellos que recibieron el tratamiento (acceso a Medicaid) y aquellos que no lo recibieron, en la población general. En este contexto, el ATE mide el impacto promedio de tener acceso a Medicaid en la salud general autoreportada de los beneficiarios, independientemente de si realmente usaron el servicio o no.
 
-- **Efecto Promedio en los Tratados (TOT)**: El TOT es la diferencia promedio en los resultados entre aquellos que recibieron el tratamiento (acceso a Medicaid) y aquellos que no lo recibieron, pero solo entre los individuos que realmente utilizaron el tratamiento. En este contexto, el TOT mide el impacto promedio de tener acceso a Medicaid en la salud general autoreportada de los beneficiarios que realmente utilizaron los servicios de Medicaid.
+-   **Efecto Promedio en los Tratados (TOT)**: El TOT es la diferencia promedio en los resultados entre aquellos que recibieron el tratamiento (acceso a Medicaid) y aquellos que no lo recibieron, pero solo entre los individuos que realmente utilizaron el tratamiento. En este contexto, el TOT mide el impacto promedio de tener acceso a Medicaid en la salud general autoreportada de los beneficiarios que realmente utilizaron los servicios de Medicaid.
 
 En este caso el *policy maker* se debería de fijar en el ATE ya que no solo le importan los beneficios propios del programa, si no también el beneficio que esté tiene sobre la población total (beneficio más externalidades). El TOT le interesaría más a los médicos o a Medicaid para tener el efecto de su programa.
 
@@ -84,19 +86,15 @@ En este caso el *policy maker* se debería de fijar en el ATE ya que no solo le 
 
 *Prueba de Hipótesis*
 
-- $H_0$: El tratamiento (ganar la lotería) no tiene efecto sobre los beneficiarios ($ATE = 0$)
-- $H_1$: El tratamiento (ganar la lotería) tiene un efecto en la salud autoreportada de los beneficiarios $ATE \neq 0$
+-   $H_0$: El tratamiento (ganar la lotería) no tiene efecto sobre los beneficiarios ($ATE = 0$)
+-   $H_1$: El tratamiento (ganar la lotería) tiene un efecto en la salud autoreportada de los beneficiarios $ATE \neq 0$
 
-Definición de $ATE$:
-$$
+Definición de $ATE$: $$
 ATE = \mathbb{E}[Y^T_i] - \mathbb{E}[Y^C_i]
-$$
-Donde:
+$$ Donde:
 
-- $Y^T_i$: es el resultado potencial para el individuo $i$ sí recibe el tratamiento (pertence a $T$)
-- $Y^C_i$: es el resultado potencial para el individuo $i$ si no recibe el tratamiento (pertenece a $C$)
-
-
+-   $Y^T_i$: es el resultado potencial para el individuo $i$ sí recibe el tratamiento (pertence a $T$)
+-   $Y^C_i$: es el resultado potencial para el individuo $i$ si no recibe el tratamiento (pertenece a $C$)
 
 ```{r}
 # Estimador de Neyman
@@ -116,20 +114,20 @@ neyman_estimator <- function(data, outcome, treatment) {
 ney_results <- neyman_estimator(oregon_12, "health_gen_bin_12m", "treatment")
 ney_results
 ```
+
 Efecto Promedio del Tratamiento (ATE):
 
-- El ATE estimado es -0.0503. Esto significa que, en promedio, el grupo de tratamiento (los que ganaron la lotería de Medicaid) tiene una probabilidad 5.03% menor de reportar buena salud general (health_gen_bin_12m) en comparación con el grupo de control (los que no ganaron la lotería de Medicaid). Este resultado sugiere que el tratamiento tuvo un efecto negativo en la salud general autoreportada de los beneficiarios.
+-   El ATE estimado es -0.0503. Esto significa que, en promedio, el grupo de tratamiento (los que ganaron la lotería de Medicaid) tiene una probabilidad 5.03% menor de reportar buena salud general (health_gen_bin_12m) en comparación con el grupo de control (los que no ganaron la lotería de Medicaid). Este resultado sugiere que el tratamiento tuvo un efecto negativo en la salud general autoreportada de los beneficiarios.
 
 *Nota: El signo negativo es por como está construida la definición del ATE, no debería interpretarse como un efecto negativo.*
 
 Error Estándar (SE):
 
-- El error estándar del ATE es 0.00735. Por lo tanto, la estimación es precisa.
+-   El error estándar del ATE es 0.00735. Por lo tanto, la estimación es precisa.
 
 Signficancia:
 
-- El P-value es de 8.53e-12, por lo cual podemos aceptar con un nivel de significancia de 0.001 (o hasta menor) que el efecto del tratamiento (ganar la lotería de Medicaid) sobre la salud general autoreportada doce meses después es estadísticamente significativo.
-
+-   El P-value es de 8.53e-12, por lo cual podemos aceptar con un nivel de significancia de 0.001 (o hasta menor) que el efecto del tratamiento (ganar la lotería de Medicaid) sobre la salud general autoreportada doce meses después es estadísticamente significativo.
 
 ### c) Estimación OLS simple (sin controles) errores heterocedásticos
 
@@ -138,16 +136,17 @@ model_ols_simple <- lm(health_gen_bin_12m ~ treatment, data = oregon_12)
 ```
 
 Ecuación estimada:
+
 ```{r}
 coeficientes <- coef(model_ols_simple)
 cat("health_gen_bin_12m =", coeficientes[1], "+", coeficientes[2], "* treatment\n")
 ```
 
 Resultados:
+
 ```{r}
 coeftest(model_ols_simple, vcov = vcovHC(model_ols_simple, type = "HC1"))
 ```
-
 
 El coeficiente del tratamiento representa el cambio en la probabilidad de reportar buena salud general asociado con ganar la lotería de Medicaid. La estimación es -0.0503, lo que indica que, en promedio, ganar la lotería de Medicaid reduce la probabilidad de reportar buena salud general en un 5.03%. Este resultado es estadísticamente significativo al nivel del 0.001. Esto concuerda con lo obtenido en la prueba de Neyman.
 
@@ -160,15 +159,16 @@ model_ols_controls <- lm(health_gen_bin_12m ~ treatment + birthyear_list + femal
 # Errores heterocedásticos
 coeftest(model_ols_controls, vcov = vcovHC(model_ols_controls, type = "HC1"))
 ```
+
 Los controles se eligieron basándonos en las variables que tenían sesgos al hacer las tablas de balance. Al utilizarlas como control podemos reducir el efecto que tienen y obtener un mejor $ATE$.
 
 Al controlar por las variables sesgadas, podemos ver que el coeficiente del tratamiento disminuye, esto significa que que ganar la lotería de Medicaid reduce la probabilidad de reportar buena salud general en un 4.51% (sifnificativo con un significancia muy baja menor 0.001)
 
 Para los coeficientes de las variables control:
 
-- Cada año adicional de edad está asociado con una reducción de 0.74% en la probabilidad de reportar buena salud general.
-- Ser mujer no tiene un efecto significativo en la probabilidad de reportar buena salud general. (nota al profesor, si fuera un reporte quitaría las variables no significativas y volvería a correr la regresión solo con controles significativos pero para no llenar de regresiones el inciso lo dejaré con los iniciales)
-- Un aumento en la categoría de ingresos del hogar está asociado con una reducción del 1.73% en la probabilidad de reportar buena salud general.
+-   Cada año adicional de edad está asociado con una reducción de 0.74% en la probabilidad de reportar buena salud general.
+-   Ser mujer no tiene un efecto significativo en la probabilidad de reportar buena salud general. (nota al profesor, si fuera un reporte quitaría las variables no significativas y volvería a correr la regresión solo con controles significativos pero para no llenar de regresiones el inciso lo dejaré con los iniciales)
+-   Un aumento en la categoría de ingresos del hogar está asociado con una reducción del 1.73% en la probabilidad de reportar buena salud general.
 
 ### e) Agregando el efecto de seis meses después como control
 
@@ -179,6 +179,7 @@ model_ols_controls_6m <- lm(health_gen_bin_6m ~ treatment + birthyear_list + fem
 # Errores heterocedásticos
 coeftest(model_ols_controls_6m, vcov = vcovHC(model_ols_controls_6m, type = "HC1"))
 ```
+
 Es curioso observar que en el análisis a seis meses se ve un impacto marginalmente significativo en ser mujer, aunque no es altamente significativo (p-valor = 0.0647). Esto confirma que la forma en la que se realizó la submuestra podría no haber sido correcta. Sin embargo, el efecto del tratamiento a los seis meses (-5.11%) es consistente y no es muy diferente del efecto observado a los doce meses (-4.51%), lo que sugiere una robustez en la influencia del tratamiento sobre la salud general autoreportada.
 
 ### f) Reporte de resultados
@@ -192,7 +193,7 @@ stargazer(model_ols_simple, model_ols_controls, model_ols_controls_6m,
           out = "results.txt")
 ```
 
-El tamaño del efecto encontrado (-4.51% a los 12 meses y -5.11% a los 6 meses) es relativamente pequeño pero estadísticamente significativo. Esto puede considerarse un efecto moderado en el contexto de intervenciones de salud pública, donde cambios en la percepción de salud general pueden reflejar una combinación de múltiples factores. Con los controles, la $R^2$ mejora de forma significativa, lo que quiere decir que si explica mejor los datos. 
+El tamaño del efecto encontrado (-4.51% a los 12 meses y -5.11% a los 6 meses) es relativamente pequeño pero estadísticamente significativo. Esto puede considerarse un efecto moderado en el contexto de intervenciones de salud pública, donde cambios en la percepción de salud general pueden reflejar una combinación de múltiples factores. Con los controles, la $R^2$ mejora de forma significativa, lo que quiere decir que si explica mejor los datos.
 
 ## Primeras diferencias
 
@@ -206,13 +207,14 @@ merged_data <- merged_data %>%
 ```
 
 ### a) Análisis de primeras diferencias (datos basales y doce meses después)
+
 ```{r}
 # Estimar el modelo de primeras diferencias con la variable de tratamiento original
 model_diff <- lm(diff_health_gen_bin ~ treatment_0m, data = merged_data)
 summary(model_diff)
 ```
 
-El modelo indica que hay un aumento del 4.47%  en la probabilidad de reportar buena salud general en el grupo de tratamiento entre los dos periodos.Este resultado es estadísticamente significativo al nivel del 5%.
+El modelo indica que hay un aumento del 4.47% en la probabilidad de reportar buena salud general en el grupo de tratamiento entre los dos periodos.Este resultado es estadísticamente significativo al nivel del 5%.
 
 ### b) Tabla de 2x2
 
@@ -230,11 +232,13 @@ diff_in_diff = (table_2x2$mean_health_12m[2] - table_2x2$mean_health_0m[2]) -
 
 diff_in_diff
 ```
+
 ### c) Utilizando MCO.
 
 $$
 \Delta \text{Health Gen Bin} = \beta_0 + \beta_1 \text{Treatment} + \epsilon
 $$
+
 ```{r}
 model_diff_mco <- lm(diff_health_gen_bin ~ treatment_0m, data = merged_data)
 summary(model_diff_mco)
@@ -255,6 +259,7 @@ pdata <- pdata.frame(merged_data, index = "person_id")
 # Resultados del modelo
 #summary(model_fe)
 ```
+
 ## Primeras diferencias
 
 ```{r}
@@ -282,8 +287,8 @@ panel_data <- bind_rows(oregon_0, oregon_6, oregon_12)
 pdata <- pdata.frame(panel_data, index = c("person_id", "time"))
 ```
 
-
 ### a) Estimación de primeras diferencias
+
 ```{r}
 # Estimación de primeras diferencias
 model_diff_3 <- plm(health_gen_bin ~ treatment, data = pdata, model = "fd")
@@ -301,37 +306,38 @@ table_3x2 <- panel_data %>%
 (table_3x2)
 ```
 
-1. DID 6 meses:
+1.  DID 6 meses:
 
-
+```{=tex}
 \begin{align*}
 \text{DID}_{6m} &= (\text{mean\_health}_{6m, \text{treatment}} - \text{mean\_health}_{0m, \text{treatment}}) \\
 &- (\text{mean\_health}_{6m, \text{control}} - \text{mean\_health}_{0m, \text{control}})
 \end{align*}
-
+```
+```{=tex}
 \begin{align*}
 \text{DID}_{6m} &= (0.407 - 0.369) \\
 &- (0.465 - 0.393) \\
 &= 0.038 - 0.072 \\
 &= -0.034
 \end{align*}
+```
+2.  DID 12 meses:
 
-
-2. DID 12 meses:
-
+```{=tex}
 \begin{align*}
 \text{DID}_{12m} &= (\text{mean\_health}_{12m, \text{treatment}} - \text{mean\_health}_{0m, \text{treatment}}) \\
 &- (\text{mean\_health}_{12m, \text{control}} - \text{mean\_health}_{0m, \text{control}})
 \end{align*}
-
+```
+```{=tex}
 \begin{align*}
 \text{DID}_{12m} &= (0.389 - 0.369) \\
 &- (0.439 - 0.393) \\
 &= 0.020 - 0.046 \\
 &= -0.026
 \end{align*}
-
-
+```
 ### c) MCO
 
 ```{r}
@@ -347,4 +353,3 @@ ppanel_data <- panel_data %>%
 # Resultados del modelo
 #summary(model_diff_mco)
 ```
-
