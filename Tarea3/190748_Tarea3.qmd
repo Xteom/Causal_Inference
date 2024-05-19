@@ -9,6 +9,8 @@ include: true #muesta salida
 ---
 
 ```{r, include=FALSE}
+library(reticulate)
+use_condaenv(condaenv = "itam")
 #install.packages(c("plm"))
 library(dplyr)
 library(ggplot2)
@@ -17,7 +19,7 @@ library(sandwich)
 library(lmtest)
 library(stargazer)
 library(plm)
-
+library(tidyr)
 ```
 
 Oregon tiene actualmente una lista de espera de 90,000 personas de bajos ingresos que buscan acceder a Medicaid, pero sólo dispone de 30,000 cupos disponibles. Adicionalmente, el estado carece de datos concretos para verificar si el acceso a Medicaid realmente tiene un impacto positivo en la salud autoreportada de los beneficiarios.
@@ -195,7 +197,7 @@ stargazer(model_ols_simple, model_ols_controls, model_ols_controls_6m,
 
 El tamaño del efecto encontrado (-4.51% a los 12 meses y -5.11% a los 6 meses) es relativamente pequeño pero estadísticamente significativo. Esto puede considerarse un efecto moderado en el contexto de intervenciones de salud pública, donde cambios en la percepción de salud general pueden reflejar una combinación de múltiples factores. Con los controles, la $R^2$ mejora de forma significativa, lo que quiere decir que si explica mejor los datos.
 
-## Primeras diferencias
+## Primeras diferencias (dos periodos de tiempo)
 
 ```{r}
 merged_data <- merge(oregon_0, oregon_12, by = "person_id", suffixes = c("_0m", "_12m"))
@@ -213,25 +215,32 @@ merged_data <- merged_data %>%
 model_diff <- lm(diff_health_gen_bin ~ treatment_0m, data = merged_data)
 summary(model_diff)
 ```
-
-El modelo indica que hay un aumento del 4.47% en la probabilidad de reportar buena salud general en el grupo de tratamiento entre los dos periodos.Este resultado es estadísticamente significativo al nivel del 5%.
+El coeficiente del tratamiento nos indica que recibir el tratamiento esta relacionado con una mejor en la salud autoreportada de un `r round(unname(coef(model_diff)["treatment_0m"])*100,2)`% en comparación al grupo control (con significancia del 0.05). 
 
 ### b) Tabla de 2x2
 
 ```{r}
-table_2x2 <- merged_data %>%
-  group_by(treatment_12m) %>%
-  summarize(
-    mean_health_0m = mean(health_gen_bin_0m, na.rm = TRUE),
-    mean_health_12m = mean(health_gen_bin_12m, na.rm = TRUE)
-  )
-table_2x2
-# Calcular el estimador de diferencias en diferencias
-diff_in_diff = (table_2x2$mean_health_12m[2] - table_2x2$mean_health_0m[2]) - 
-               (table_2x2$mean_health_12m[1] - table_2x2$mean_health_0m[1])
+# Calcular las medias por grupo de tratamiento y control en el periodo basal
+baseline_means <- oregon_0 %>%
+  group_by(treatment) %>%
+  summarize(mean_health_0m = mean(health_gen_bin_0m, na.rm = TRUE))
 
-diff_in_diff
+# Calcular las medias por grupo de tratamiento y control a los 12 meses
+twelve_months_means <- oregon_12 %>%
+  group_by(treatment) %>%
+  summarize(mean_health_12m = mean(health_gen_bin_12m, na.rm = TRUE))
+
+# Unir las medias en una sola tabla
+means_table <- merge(baseline_means, twelve_months_means, by = "treatment", suffixes = c("_0m", "_12m"))
+
+(means_table)
+# Calcular el estimador de diferencias en diferencias
+diff_in_diff = (means_table$mean_health_12m[2] - means_table$mean_health_0m[2]) - 
+               (means_table$mean_health_12m[1] - means_table$mean_health_0m[1])
+
+(diff_in_diff)
 ```
+Cuando utilizamos diferencias en diferencias simple para calcular el efecto del tratamiento, obtenemos un valor de `r round(diff_in_diff*100,2)`%, el cual es mayor que cuando calculamos el efecto utilizando el modelo de primeras diferencias, que es `r round(unname(coef(model_diff)["treatment_0m"])*100,2)`%. Esto se debe a que, al utilizar el modelo de primeras diferencias, nos fijamos solo en el efecto de las personas que estaban presentes en ambos periodos. En el modelo de diferencias en diferencias simple, se incluyen todas las observaciones disponibles, independientemente de si los individuos están presentes en ambos periodos. Es posible que en este segundo modelo tengamos más personas que recibieron el tratamiento en el grupo de doce meses después, lo que hace que el efecto real se perciba mayor.
 
 ### c) Utilizando MCO.
 
@@ -242,25 +251,77 @@ $$
 ```{r}
 model_diff_mco <- lm(diff_health_gen_bin ~ treatment_0m, data = merged_data)
 summary(model_diff_mco)
-
 ```
 
-Se cumple el mismo resultado.
+Se cumple el mismo resultado (`r round(unname(coef(model_diff_mco)["treatment_0m"])*100,2)`%).
 
 ### d) Modelo de efectos fijos
 
 ```{r}
-# Asegurarse de que el índice está configurado correctamente
-pdata <- pdata.frame(merged_data, index = "person_id")
+# Separar datos basales
+baseline_data <- oregon_0 %>%
+  mutate(time = 0)
 
-# Estimar el modelo de efectos fijos utilizando la variable original de tratamiento
-#model_fe <- plm(diff_health_gen_bin ~ treatment_0m, data = pdata, model = "within")
+# Separar datos de 12 meses
+twelve_months_data <- oregon_12 %>%
+  select(-ins_any_12m) %>%
+  mutate(time = 1)
 
-# Resultados del modelo
+# Renombrar columnas para combinar adecuadamente
+names(baseline_data) <- gsub("_0m", "", names(baseline_data))
+names(twelve_months_data) <- gsub("_12m", "", names(twelve_months_data))
+
+# Obtener IDs comunes en ambos conjuntos de datos
+common_ids <- intersect(baseline_data$person_id, twelve_months_data$person_id)
+
+# Filtrar datos basales y de 12 meses para incluir solo IDs comunes
+baseline_data_filtered <- baseline_data %>%
+  filter(person_id %in% common_ids)
+
+twelve_months_data_filtered <- twelve_months_data %>%
+  filter(person_id %in% common_ids)
+
+# Combinar las dos bases de datos
+combined_data <- bind_rows(baseline_data_filtered, twelve_months_data_filtered)
+
+# Convertir los datos a formato panel
+pdata <- pdata.frame(combined_data, index = c("person_id", "time"))
+write.csv(pdata, file = "pdata.csv", row.names = FALSE)
+
+#pdata <- read.csv("pdata.csv")
+
+#model_fe <- plm(health_gen_bin ~ treatment, 
+#                data = pdata, 
+#                index = c("person_id", "time"),
+#                model = "within")
 #summary(model_fe)
 ```
 
-## Primeras diferencias
+```{python}
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+from linearmodels.panel import PanelOLS
+
+pdata = pd.read_csv("pdata.csv")
+
+# Convertir a un DataFrame de panel
+pdata = pdata.set_index(['person_id', 'time'])s
+
+# Estimar el modelo de efectos fijos
+mod = PanelOLS.from_formula('health_gen_bin ~ treatment + EntityEffects', pdata)
+res = mod.fit(cov_type='clustered', cluster_entity=True, drop_absorbed=True)
+
+# Mostrar los resultados del modelo
+print(res.summary)
+
+
+```
+
+
+
+
+## Primeras diferencias (tres periodos de tiempo)
 
 ```{r}
 oregon_0 <- read.csv("oregon_0.csv") %>% rename(health_gen_bin = health_gen_bin_0m)
