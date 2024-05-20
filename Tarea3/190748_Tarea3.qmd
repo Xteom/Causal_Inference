@@ -215,32 +215,67 @@ merged_data <- merged_data %>%
 model_diff <- lm(diff_health_gen_bin ~ treatment_0m, data = merged_data)
 summary(model_diff)
 ```
-El coeficiente del tratamiento nos indica que recibir el tratamiento esta relacionado con una mejor en la salud autoreportada de un `r round(unname(coef(model_diff)["treatment_0m"])*100,2)`% en comparación al grupo control (con significancia del 0.05). 
+
+El coeficiente del tratamiento nos indica que recibir el tratamiento esta relacionado con una mejor en la salud autoreportada de un `r round(unname(coef(model_diff)["treatment_0m"])*100,2)`% en comparación al grupo control (con significancia del 0.05).
 
 ### b) Tabla de 2x2
 
 ```{r}
-# Calcular las medias por grupo de tratamiento y control en el periodo basal
-baseline_means <- oregon_0 %>%
-  group_by(treatment) %>%
-  summarize(mean_health_0m = mean(health_gen_bin_0m, na.rm = TRUE))
+oregon_0 <- read.csv("oregon_0.csv")
+oregon_6 <- read.csv("oregon_6.csv")
+oregon_12 <- read.csv("oregon_12.csv")
 
-# Calcular las medias por grupo de tratamiento y control a los 12 meses
-twelve_months_means <- oregon_12 %>%
-  group_by(treatment) %>%
-  summarize(mean_health_12m = mean(health_gen_bin_12m, na.rm = TRUE))
+# Añadir una columna de tiempo a cada dataframe
+oregon_0$time <- 0
+oregon_6$time <- 6
+oregon_12$time <- 12
 
-# Unir las medias en una sola tabla
-means_table <- merge(baseline_means, twelve_months_means, by = "treatment", suffixes = c("_0m", "_12m"))
+# Asegurarse de que las variables estén en el formato correcto
+oregon_0$treatment <- as.factor(oregon_0$treatment)
+oregon_6$treatment <- as.factor(oregon_6$treatment)
+oregon_12$treatment <- as.factor(oregon_12$treatment)
 
-(means_table)
-# Calcular el estimador de diferencias en diferencias
-diff_in_diff = (means_table$mean_health_12m[2] - means_table$mean_health_0m[2]) - 
-               (means_table$mean_health_12m[1] - means_table$mean_health_0m[1])
+oregon_0$female_list <- as.factor(oregon_0$female_list)
+oregon_6$female_list <- as.factor(oregon_6$female_list)
+oregon_12$female_list <- as.factor(oregon_12$female_list)
 
-(diff_in_diff)
+oregon_0$health_gen_bin <- oregon_0$health_gen_bin_0m
+oregon_6$health_gen_bin <- oregon_6$health_gen_bin_6m
+oregon_12$health_gen_bin <- oregon_12$health_gen_bin_12m
+
+# Unir los dataframes
+df_full <- bind_rows(oregon_0, oregon_6, oregon_12)
 ```
-Cuando utilizamos diferencias en diferencias simple para calcular el efecto del tratamiento, obtenemos un valor de `r round(diff_in_diff*100,2)`%, el cual es mayor que cuando calculamos el efecto utilizando el modelo de primeras diferencias, que es `r round(unname(coef(model_diff)["treatment_0m"])*100,2)`%. Esto se debe a que, al utilizar el modelo de primeras diferencias, nos fijamos solo en el efecto de las personas que estaban presentes en ambos periodos. En el modelo de diferencias en diferencias simple, se incluyen todas las observaciones disponibles, independientemente de si los individuos están presentes en ambos periodos. Es posible que en este segundo modelo tengamos más personas que recibieron el tratamiento en el grupo de doce meses después, lo que hace que el efecto real se perciba mayor.
+
+```{r}
+# Crear la tabla de contingencia 2x2
+table_2x2 <- df_full %>%
+  group_by(treatment, time) %>%
+  summarize(mean_health_gen_bin = mean(health_gen_bin, na.rm = TRUE))
+
+# Filtrar solo los periodos inicial (0) y de 12 meses (12)
+table_2x2_filtered <- table_2x2 %>%
+  filter(time %in% c(0, 12))
+
+# Spread para convertir en formato ancho (manteniendo solo periodos 0 y 12)
+table_2x2_filtered <- table_2x2_filtered %>%
+  spread(key = time, value = mean_health_gen_bin)
+
+# Calcular el estimador de diferencias en diferencias usando la tabla filtrada
+diff_in_diff_filtered = (table_2x2_filtered$`12`[2] - table_2x2_filtered$`0`[2]) - 
+                        (table_2x2_filtered$`12`[1] - table_2x2_filtered$`0`[1])
+
+# Mostrar la tabla filtrada y el valor de diferencias en diferencias
+print(table_2x2_filtered)
+print(diff_in_diff_filtered)
+
+# Spread para convertir en formato ancho
+table_2x2 <- table_2x2 %>%
+  spread(key = time, value = mean_health_gen_bin)
+
+```
+
+Cuando utilizamos diferencias en diferencias simple para calcular el efecto del tratamiento, obtenemos un valor de `r round(diff_in_diff_filtered*100,2)`%, el cual es mayor que cuando calculamos el efecto utilizando el modelo de primeras diferencias, que es `r round(unname(coef(model_diff)["treatment_0m"])*100,2)`%. Esto se debe a que, al utilizar el modelo de primeras diferencias, nos fijamos solo en el efecto de las personas que estaban presentes en ambos periodos. En el modelo de diferencias en diferencias simple, se incluyen todas las observaciones disponibles, independientemente de si los individuos están presentes en ambos periodos. Es posible que en este segundo modelo tengamos más personas que recibieron el tratamiento en el grupo de doce meses después, lo que hace que el efecto real se perciba mayor.
 
 ### c) Utilizando MCO.
 
@@ -258,159 +293,223 @@ Se cumple el mismo resultado (`r round(unname(coef(model_diff_mco)["treatment_0m
 ### d) Modelo de efectos fijos
 
 ```{r}
-# Separar datos basales
-baseline_data <- oregon_0 %>%
-  mutate(time = 0)
+df_full_aux <- df_full %>%
+  mutate(
+    Post = as.numeric(time == 12),  # Variable Post, indica el periodo posterior al tratamiento
+    Treatment = as.numeric(treatment == 1),  # Variable Treatment, indica si el individuo recibió el tratamiento
+    Treatment_Post = Post * Treatment  # Interacción entre Post y Treatment
+  ) %>%
+  filter(time %in% c(0, 12) & !is.na(health_gen_bin)) 
 
-# Separar datos de 12 meses
-twelve_months_data <- oregon_12 %>%
-  select(-ins_any_12m) %>%
-  mutate(time = 1)
+# Convertimos el data.frame a un pdata.frame para plm, especificando los índices
+pdata_3d <- pdata.frame(df_full_aux, index = c("person_id", "time"))
 
-# Renombrar columnas para combinar adecuadamente
-names(baseline_data) <- gsub("_0m", "", names(baseline_data))
-names(twelve_months_data) <- gsub("_12m", "", names(twelve_months_data))
+# Ajustamos el modelo de efectos fijos
+ef_model <- plm(health_gen_bin ~ Post + Treatment + Treatment_Post, data = pdata_3d, model = "within")
 
-# Obtener IDs comunes en ambos conjuntos de datos
-common_ids <- intersect(baseline_data$person_id, twelve_months_data$person_id)
-
-# Filtrar datos basales y de 12 meses para incluir solo IDs comunes
-baseline_data_filtered <- baseline_data %>%
-  filter(person_id %in% common_ids)
-
-twelve_months_data_filtered <- twelve_months_data %>%
-  filter(person_id %in% common_ids)
-
-# Combinar las dos bases de datos
-combined_data <- bind_rows(baseline_data_filtered, twelve_months_data_filtered)
-
-# Convertir los datos a formato panel
-pdata <- pdata.frame(combined_data, index = c("person_id", "time"))
-write.csv(pdata, file = "pdata.csv", row.names = FALSE)
-
-#pdata <- read.csv("pdata.csv")
-
-#model_fe <- plm(health_gen_bin ~ treatment, 
-#                data = pdata, 
-#                index = c("person_id", "time"),
-#                model = "within")
-#summary(model_fe)
+# Resumen del modelo
+summary(ef_model)
 ```
 
-```{python}
-import pandas as pd
-import numpy as np
-import statsmodels.api as sm
-from linearmodels.panel import PanelOLS
+coeficiente -0.0223241: el efecto del tratamiento en el periodo posterior es una reducción en la probabilidad de reportar una salud regular o mala en 2.23%
 
-pdata = pd.read_csv("pdata.csv")
+El coeficiente de Treatment_Post (-0.0223241) en el modelo de efectos fijos es muy similar al cambio observado en el modelo de primeras diferencias (-0.022324). Esto sugiere que el modelo de efectos fijos está capturando de manera efectiva el mismo efecto observado en el modelo de primeras diferencias. El modelo de efectos fijos controla por variables no observadas que son constantes en el tiempo, por lo tanto, parece ser que el efecto estimado no está sesgado por estas variables.
 
-# Convertir a un DataFrame de panel
-pdata = pdata.set_index(['person_id', 'time'])s
-
-# Estimar el modelo de efectos fijos
-mod = PanelOLS.from_formula('health_gen_bin ~ treatment + EntityEffects', pdata)
-res = mod.fit(cov_type='clustered', cluster_entity=True, drop_absorbed=True)
-
-# Mostrar los resultados del modelo
-print(res.summary)
-
+```{r}
+ef_model <- plm(health_gen_bin ~ Post + Treatment + Treatment_Post, data = pdata_3d, model = "within")
+summary(ef_model)
 
 ```
 
+El coeficiente de Post indica que, en promedio, la probabilidad de reportar una salud regular o mala aumenta en 2.65% en el periodo posterior al tratamiento, independientemente de si los individuos recibieron el tratamiento. Este efecto es altamente significativo.
 
+El coeficiente de Treatment_Post representa el efecto adicional del tratamiento en el periodo posterior. Aunque el signo es negativo, indicando una reducción en la probabilidad de reportar una salud regular o mala del 1.30%, este efecto no es estadísticamente significativo (p-valor \> 0.05).
 
+El valor del coeficiente de Treatment_Post en el modelo de efectos fijos (-0.01297) es similar al estimador de diferencias en diferencias simple que obtuvimos anteriormente (-0.01561), lo cual es consistente dado que ambos modelos intentan capturar el efecto del tratamiento controlando por diferencias individuales.
+
+### e) Errores heterocedásticos vs errores cluster a nivel individuo
+
+*Errores heterocedásticos*:
+
+```{r}
+coeftest(ef_model, vcov = vcovHC(ef_model, type = "HC1"))
+```
+
+*Errores cluster*:
+
+```{r}
+coeftest(ef_model, vcov = vcovHC(ef_model, type = "HC1", cluster = "group"))
+```
+
+Al resultar iguales ambos errores quiere decir qu no hay heterocedasticidad significativa ni correlación intra-grupo que afecte los errores estándar por lo que el modelo es robusto ante los diferentes grupos de individuos.
 
 ## Primeras diferencias (tres periodos de tiempo)
 
-```{r}
-oregon_0 <- read.csv("oregon_0.csv") %>% rename(health_gen_bin = health_gen_bin_0m)
-oregon_6 <- read.csv("oregon_6.csv") %>% rename(health_gen_bin = health_gen_bin_6m)
-oregon_12 <- read.csv("oregon_12.csv") %>% rename(health_gen_bin = health_gen_bin_12m)
-# Añadir una columna 'time' para identificar los periodos
-oregon_0$time <- 0
-oregon_6$time <- 6
-oregon_12$time <- 12
-
-oregon_0 <- oregon_0 %>%
-  select(person_id, treatment, health_gen_bin, time)
-
-oregon_6 <- oregon_6 %>%
-  select(person_id, treatment, health_gen_bin, time)
-
-oregon_12 <- oregon_12 %>%
-  select(person_id, treatment, health_gen_bin, time)
-  
-
-panel_data <- bind_rows(oregon_0, oregon_6, oregon_12)
-
-# Convertir los datos a formato panel
-pdata <- pdata.frame(panel_data, index = c("person_id", "time"))
-```
-
-### a) Estimación de primeras diferencias
+### a) Primeras diferencias
 
 ```{r}
-# Estimación de primeras diferencias
-model_diff_3 <- plm(health_gen_bin ~ treatment, data = pdata, model = "fd")
-summary(model_diff_3)
-```
+pdata_4 <- pdata.frame(df_full, index = c("person_id", "time"))
 
-El intercepto representa la diferencia promedio en la salud general autoreportada entre los tres periodos. Hay un aumento de 2.33% en la probabilidad de reportar buena salud general.
+# Ajustar el modelo de primeras diferencias
+pd_model <- plm(health_gen_bin ~ treatment, data = pdata_4, model = "fd")
+
+# Resumen del modelo
+summary(pd_model)
+```
 
 ### b) Tabla 3x2
 
 ```{r}
-table_3x2 <- panel_data %>%
-  group_by(time, treatment) %>%
-  summarize(mean_health = mean(health_gen_bin, na.rm = TRUE), .groups = 'drop')
+# Crear la tabla de 3x2
+table_3x2 <- df_full %>%
+  group_by(treatment, time) %>%
+  summarize(mean_health_gen_bin = mean(health_gen_bin, na.rm = TRUE)) %>%
+  spread(key = time, value = mean_health_gen_bin)
+
+# Mostrar la tabla
 (table_3x2)
 ```
 
-1.  DID 6 meses:
+El estimador TOT se obtiene obteniendo la diferencia entre los grupos de tratamiento y control en los periodos 6 y 12.
 
-```{=tex}
-\begin{align*}
-\text{DID}_{6m} &= (\text{mean\_health}_{6m, \text{treatment}} - \text{mean\_health}_{0m, \text{treatment}}) \\
-&- (\text{mean\_health}_{6m, \text{control}} - \text{mean\_health}_{0m, \text{control}})
-\end{align*}
-```
-```{=tex}
-\begin{align*}
-\text{DID}_{6m} &= (0.407 - 0.369) \\
-&- (0.465 - 0.393) \\
-&= 0.038 - 0.072 \\
-&= -0.034
-\end{align*}
-```
-2.  DID 12 meses:
+Diferencias de medias para cada grupo:
 
-```{=tex}
-\begin{align*}
-\text{DID}_{12m} &= (\text{mean\_health}_{12m, \text{treatment}} - \text{mean\_health}_{0m, \text{treatment}}) \\
-&- (\text{mean\_health}_{12m, \text{control}} - \text{mean\_health}_{0m, \text{control}})
-\end{align*}
-```
-```{=tex}
-\begin{align*}
-\text{DID}_{12m} &= (0.389 - 0.369) \\
-&- (0.439 - 0.393) \\
-&= 0.020 - 0.046 \\
-&= -0.026
-\end{align*}
-```
+-   Grupo Control (Tratamiento = 0):
+
+    -   Periodo 0 a 6 meses: 0.465 - 0.393 = 0.072
+    -   Periodo 0 a 12 meses: 0.439 - 0.393 = 0.046
+
+-   Grupo Tratamiento (Tratamiento = 1):
+
+    -   Periodo 0 a 6 meses: 0.407 - 0.369 = 0.038
+    -   Periodo 0 a 12 meses: 0.389 - 0.369 = 0.020
+
+Diferencias en diferencias (DiD) para cada periodo:
+
+-   TOT de 6 meses:
+
+    -   TOT = (0.407 - 0.369) - (0.465 - 0.393)
+    -   TOT = 0.038 - 0.072 = -0.034
+
+-   TOT de 12 meses:
+
+    -   TOT = (0.389 - 0.369) - (0.439 - 0.393)
+    -   TOT = 0.020 - 0.046 = -0.026
+
+Resultados:
+
+-   El TOT de 6 meses es -0.034.
+
+-   El TOT de 12 meses es -0.026.
+
 ### c) MCO
 
 ```{r}
-ppanel_data <- panel_data %>%
-  arrange(person_id, time) %>%
-  group_by(person_id) %>%
-  mutate(diff_health_gen_bin = health_gen_bin - lag(health_gen_bin)) %>%
-  filter(!is.na(diff_health_gen_bin))
+# Preparar los datos y crear las variables necesarias
+df_full <- df_full %>%
+  mutate(
+    Post_6m = as.numeric(time == 6),  # Variable Post para 6 meses
+    Post_12m = as.numeric(time == 12),  # Variable Post para 12 meses
+    Treatment = as.numeric(treatment == 1),  # Variable Treatment
+    Treatment_Post_6m = Post_6m * Treatment,  # Interacción Treatment y Post 6 meses
+    Treatment_Post_12m = Post_12m * Treatment  # Interacción Treatment y Post 12 meses
+  ) %>%
+  filter(!is.na(health_gen_bin))  # Filtrar observaciones sin valores NA en health_gen_bin
 
-# Estimar el modelo de MCO para diferencias en diferencias
-#model_diff_mco <- lm(diff_health_gen_bin ~ treatment, data = panel_data)
-
-# Resultados del modelo
-#summary(model_diff_mco)
+# Ajustar el modelo MCO (Diferencias en Diferencias)
+mco_model <- lm(health_gen_bin ~ Post_6m + Post_12m + Treatment + Treatment_Post_6m + Treatment_Post_12m, data = df_full)
+summary(mco_model)
 ```
+
+### d) Comparación
+
+La comparación de los efectos estimados en los diferentes modelos muestra que el tratamiento tiene un efecto consistente en la mejora de la salud autoreportada, reduciendo la probabilidad de reportar una salud regular o mala. La adición de un tercer periodo en el modelo de primeras diferencias permite capturar cambios a corto y largo plazo, mostrando una reducción significativa en la probabilidad de reportar una salud regular o mala debido al tratamiento tanto a los seis como a los doce meses en el modelo MCO. Sin embargo, el modelo de primeras diferencias con tres periodos no logró significancia en todos los coeficientes, lo que puede deberse a la variabilidad adicional y la inclusión de más datos temporales. Además, es importante recordar que nuestros datos después de 6 meses no estaban balanceados, lo cual podría afectar los resultados de los modelos y contribuir a la falta de significancia en algunos coeficientes. Por otro lado, el modelo MCO confirmó la efectividad del tratamiento con significancia estadística en los efectos de Treatment_Post_6m y Treatment_Post_12m. La manera adecuada de comparar los efectos es observando la consistencia y significancia de los coeficientes a través de los diferentes modelos y periodos de tiempo.
+
+### e) Efectos fijos
+
+```{r}
+pdata_4e <- pdata.frame(df_full, index = c("person_id", "time"))
+
+ef_model_4 <- plm(health_gen_bin ~ 
+                    Post_6m + Post_12m + 
+                    Treatment_Post_6m + Treatment_Post_12m, 
+                  data = pdata_4e, model = "within")
+summary(ef_model_4)
+```
+
+### f) Errores heterocedásticos vs Errores Cluster
+
+*Errores heterocedásticos*:
+
+```{r}
+coeftest(ef_model_4, vcov = vcovHC(ef_model_4, type = "HC1"))
+```
+
+*Errores cluster*:
+
+```{r}
+coeftest(ef_model_4, vcov = vcovHC(ef_model_4, type = "HC1", cluster = "group"))
+```
+
+Vuelven a salir iguales
+
+\pagebreak
+
+## Reporte
+
+### Tabla de modelos.
+
+```{r}
+# Generar la tabla de resultados con stargazer
+stargazer(
+  model_ols_simple, 
+  model_ols_controls, 
+  ef_model_4, 
+  mco_model, 
+  type = "text",
+  title = "Estimación del Efecto del Acceso a Medicaid sobre la Salud Autoreportada",
+  dep.var.labels = c("Salud General Autoreportada"),
+  covariate.labels = c("Tratamiento", "Año de Nacimiento", "Mujer", "Ingreso del Hogar", "Post 6m", "Post 12m", "Tratamiento * Post 6m", "Tratamiento * Post 12m"),
+  no.space = TRUE,
+  omit.stat = c("f", "ser")
+)
+
+```
+
+### Reporte
+
+#### Antecedentes:
+
+Oregon tiene actualmente una lista de espera de 90,000 personas de bajos ingresos que buscan acceder a Medicaid, pero solo dispone de 30,000 cupos disponibles. Ante esta situación, se implementó una lotería para asignar los cupos disponibles de manera aleatoria, lo que permitió evaluar el impacto del acceso a Medicaid sobre la salud autoreportada de los beneficiarios.
+
+#### Metodología:
+
+Se realizaron encuestas en tres momentos clave: antes de la implementación del programa, a los seis meses (submuestra de 5000 individuos) y a los doce meses. Utilizando estos datos, se aplicaron varias técnicas econométricas para estimar el impacto del tratamiento, incluyendo modelos de regresión OLS, modelos de diferencias en diferencias (DiD) y modelos de efectos fijos. Los análisis se realizaron con y sin controles relevantes para asegurar la robustez de los resultados.
+
+#### Resultados Principales:
+
+1. **Desbalance Inicial:**
+   - Los análisis de balance inicial mostraron diferencias significativas en variables como el año de nacimiento, el género y los ingresos del hogar entre los grupos de tratamiento y control. Estos desbalances pueden introducir sesgos que deben ser controlados en los modelos de regresión subsecuentes.
+
+2. **Estimación OLS Simple:**
+   - La estimación OLS sin controles mostró que ganar la lotería de Medicaid reduce la probabilidad de reportar una salud regular o mala en un 5.03% (p < 0.01). Este resultado es significativo y sugiere un impacto positivo del acceso a Medicaid en la salud autoreportada.
+
+3. **Estimación OLS con Controles:**
+   - Al incluir controles como el año de nacimiento, género e ingresos del hogar, el efecto del tratamiento se redujo a una disminución del 4.51% en la probabilidad de reportar una salud regular o mala (p < 0.01). Este ajuste subraya la importancia de controlar por variables basales desbalanceadas para obtener estimaciones más precisas del efecto del tratamiento.
+
+4. **Modelos de Primeras Diferencias y Efectos Fijos:**
+   - Los modelos de primeras diferencias, tanto con dos como con tres periodos, y los modelos de efectos fijos sugieren que el efecto del tratamiento es consistente y significativo a largo plazo. En particular, el modelo de efectos fijos con tres periodos mostró que el tratamiento reduce la probabilidad de reportar una salud regular o mala en un 2.23% a los doce meses (p < 0.05). Sin embargo, el modelo no mostró un efecto significativo a los seis meses, lo que podría deberse a desbalances en los datos de este periodo.
+
+5. **Diferencias en Diferencias (DiD):**
+   - Los modelos de DiD mostraron un efecto consistente del tratamiento en la mejora de la salud autoreportada. El análisis indicó una reducción del 2.65% en la probabilidad de reportar una salud regular o mala a los doce meses (p < 0.01). La inclusión de un tercer periodo en el análisis de DiD permitió capturar mejor los efectos a corto y largo plazo del tratamiento.
+
+#### Reflexión Final:
+
+La comparación de los diferentes modelos y métodos de estimación destacó varias consideraciones importantes:
+
+- **Robustez y Significancia:** Aunque los diferentes modelos presentaron tamaños de efecto ligeramente diferentes, todos mostraron un impacto significativo y consistente del acceso a Medicaid en la salud autoreportada de los beneficiarios. La robustez de los resultados fue confirmada a través de varios métodos econométricos.
+  
+- **Importancia del Control de Variables Basales:** El ajuste por variables desbalanceadas como el año de nacimiento, género e ingresos del hogar es crucial para obtener estimaciones precisas del efecto del tratamiento. Los desbalances iniciales pueden introducir sesgos que afecten la interpretación de los resultados.
+
+
+Estos resultados proporcionan una base sólida para argumentar que el acceso a Medicaid tiene un impacto positivo en la salud de las poblaciones vulnerables, lo cual es crucial para los formuladores de políticas. La evidencia obtenida puede informar decisiones políticas y prácticas en contextos similares, destacando la importancia de programas de salud pública como Medicaid.
